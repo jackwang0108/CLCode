@@ -14,7 +14,7 @@
                 "--model",
                 "derpp",
                 "--backbone",
-                "--resnet18",
+                "resnet18",
                 "--dataset",
                 "seq-cifar100",
                 "--lr",
