@@ -1,44 +1,57 @@
-# Copyright 2020-present, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
+# Standard Library
 import os
 import random
+from pathlib import Path
+from typing import Optional
+
+# Third-Party Library
 import torch
+
+# Torch Library
 import numpy as np
 
-
-def get_device(gpu_id=None) -> torch.device:
-    """
-    Returns the GPU device if available else CPU.
-    """
-    if gpu_id is None:
-        return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    else:
-        return torch.device("cuda:{}".format(gpu_id))
+ROOT_DIR: Path = Path(__file__).resolve().parent.parent
 
 
-def data_path() -> str:
+def get_device(gpu_id: Optional[int] = None) -> torch.device:
     """
-    Returns the data path.
+    get_device returns the GPU device if available else CPU.
+
+    Args:
+        gpu_id (int, optional): gpu id. Defaults to None.
+
+    Returns:
+        torch.device of selected gpu
     """
-    return '/home/iid/WQZA/dataset/'
-    # return 'E://dataset/'
+    return torch.device(f"cuda:{0 if gpu_id is None else gpu_id}" if torch.cuda.is_available() else "cpu")
 
 
-def base_path() -> str:
+def data_path() -> Path:
     """
-    Returns the base bath where to log accuracies and tensorboard data.
+    data_path returns the path where datasets are stored.
+
+    Returns:
+        Path: path to datasets
     """
-    return '/home/iid/WQZA/code/DER/'
-    # return './'
+    return ROOT_DIR / "data"
+
+
+def base_path() -> Path:
+    """
+    base_path returns the base bath where to log accuracies and tensorboard data.
+
+    Returns:
+        Path: path to save the logs
+    """
+    return ROOT_DIR / "log"
 
 
 def set_random_seed(seed: int) -> None:
     """
-    Sets the seeds at a certain value.
-    :param seed: the value to be set
+    set_random_seed sets the random seeds to a certain value.
+
+    Args:
+        seed (int): the value of the random seed
     """
     os.environ['PYTHONHASHSEED'] = str(seed)
     random.seed(seed)
