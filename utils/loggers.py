@@ -33,7 +33,7 @@ def print_mean_accuracy(mean_acc: np.ndarray, task_number: int,
         mean_acc_class_il, mean_acc_task_il = mean_acc
         print('\nAccuracy for {} task(s): \t [Class-IL]: {} %'
               ' \t [Task-IL]: {} %\n'.format(task_number, round(
-            mean_acc_class_il, 2), round(mean_acc_task_il, 2)), file=sys.stderr)
+                  mean_acc_class_il, 2), round(mean_acc_task_il, 2)), file=sys.stderr)
 
 
 class CsvLogger:
@@ -55,7 +55,8 @@ class CsvLogger:
     def add_fwt(self, results, accs, results_mask_classes, accs_mask_classes):
         self.fwt = forward_transfer(results, accs)
         if self.setting == 'class-il':
-            self.fwt_mask_classes = forward_transfer(results_mask_classes, accs_mask_classes)
+            self.fwt_mask_classes = forward_transfer(
+                results_mask_classes, accs_mask_classes)
 
     def add_bwt(self, results, results_mask_classes):
         self.bwt = backward_transfer(results)
@@ -107,15 +108,13 @@ class CsvLogger:
 
         columns = new_cols + columns
 
-        create_if_not_exists(base_path() + "results/" + self.setting)
-        create_if_not_exists(base_path() + "results/" + self.setting +
-                             "/" + self.dataset)
-        create_if_not_exists(base_path() + "results/" + self.setting +
-                             "/" + self.dataset + "/" + self.model)
+        create_if_not_exists(s := base_path() / f"results/{self.setting}")
+        create_if_not_exists(d := s / f"{self.dataset}")
+        create_if_not_exists(m := d / f"{self.model}")
 
         write_headers = False
-        path = base_path() + "results/" + self.setting + "/" + self.dataset\
-               + "/" + self.model + "/mean_accs.csv"
+        path = base_path() / f"results" / self.setting / \
+            self.dataset / self.model / "/mean_accs.csv"
         if not os.path.exists(path):
             write_headers = True
         with open(path, 'a') as tmp:
@@ -125,10 +124,10 @@ class CsvLogger:
             writer.writerow(args)
 
         if self.setting == 'class-il':
-            create_if_not_exists(base_path() + "results/task-il/"
-                                 + self.dataset)
-            create_if_not_exists(base_path() + "results/task-il/"
-                                 + self.dataset + "/" + self.model)
+            create_if_not_exists(
+                base_path() / f"results/task-il/{self.dataset}")
+            create_if_not_exists(
+                base_path() / f"results/task-il/{self.dataset}/{self.model}")
 
             for i, acc in enumerate(self.accs_mask_classes):
                 args['task' + str(i + 1)] = acc
@@ -138,8 +137,9 @@ class CsvLogger:
             args['forgetting'] = self.forgetting_mask_classes
 
             write_headers = False
-            path = base_path() + "results/task-il" + "/" + self.dataset + "/"\
-                   + self.model + "/mean_accs.csv"
+            path = base_path() / \
+                f"results/task-il/{self.dataset}/{self.model}" / \
+                "mean_accs.csv"
             if not os.path.exists(path):
                 write_headers = True
             with open(path, 'a') as tmp:

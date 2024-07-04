@@ -30,9 +30,8 @@ def create_stash(model: nn.Module, args: Namespace,
     model_stash['model_name'] = '/'.join(name_parts)
     model_stash['mean_accs'] = []
     model_stash['args'] = args
-    model_stash['backup_folder'] = os.path.join(base_path(), 'backups',
-                                                dataset.SETTING,
-                                                model_stash['model_name'])
+    model_stash['backup_folder'] = str(
+        base_path() / f'backups' / dataset.SETTING / model_stash['model_name'])
     return model_stash
 
 
@@ -68,7 +67,8 @@ def progress_bar(i: int, max_iter: int, epoch: Union[int, str],
     """
     if not (i + 1) % 10 or (i + 1) == max_iter:
         progress = min(float((i + 1) / max_iter), 1)
-        progress_bar = ('█' * int(50 * progress)) + ('┈' * (50 - int(50 * progress)))
+        progress_bar = ('█' * int(50 * progress)) + \
+            ('┈' * (50 - int(50 * progress)))
         print('\r[ {} ] Task {} | epoch {}: |{}| loss: {}'.format(
             datetime.now().strftime("%m-%d | %H:%M"),
             task_number + 1 if isinstance(task_number, int) else task_number,

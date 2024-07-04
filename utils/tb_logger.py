@@ -22,7 +22,7 @@ class TensorboardLogger:
         self.name = args.model
         for a_setting in self.settings:
             self.loggers[a_setting] = SummaryWriter(
-                os.path.join(base_path(), 'tensorboard_runs', a_setting, self.name))
+                str(base_path() / 'tensorboard_runs' / a_setting / self.name))
         config_text = ', '.join(
             ["%s=%s" % (name, getattr(args, name)) for name in args.__dir__()
              if not name.startswith('_')])
@@ -53,7 +53,8 @@ class TensorboardLogger:
             for kk, acc in enumerate(accs):
                 a_logger.add_scalar('acc_task%02d' % (kk + 1), acc,
                                     task_number * args.n_epochs)
-            a_logger.add_scalar('acc_mean', mean_acc, task_number * args.n_epochs)
+            a_logger.add_scalar('acc_mean', mean_acc,
+                                task_number * args.n_epochs)
 
     def log_loss(self, loss: float, args: Namespace, epoch: int,
                  task_number: int, iteration: int) -> None:
@@ -66,7 +67,8 @@ class TensorboardLogger:
         :param iteration: the current iteration
         """
         for a_logger in self.loggers.values():
-            a_logger.add_scalar('loss', loss, task_number * args.n_epochs + epoch)
+            a_logger.add_scalar(
+                'loss', loss, task_number * args.n_epochs + epoch)
 
     def log_loss_gcl(self, loss: float, iteration: int) -> None:
         """
