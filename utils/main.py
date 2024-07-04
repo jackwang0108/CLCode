@@ -1,40 +1,43 @@
-# Copyright 2022-present, Lorenzo Bonicelli, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-import numpy  # needed (don't change it)
-import importlib
+# Standard Library
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import sys
+import uuid
 import socket
+import datetime
+import importlib
+from argparse import ArgumentParser
+
+# Third-Party Library
+import numpy  # needed (don't change it)
+import setproctitle
+
+# Torch Library
+import torch
+
+# My Library
+from models import get_model
+from models import get_all_models
+from datasets import get_dataset
+from datasets import ContinualDataset
+from datasets import NAMES as DATASET_NAMES
+from utils.training import train
+from utils.best_args import best_args
+from utils.conf import set_random_seed
+from utils.args import add_management_args
+from utils.continual_training import train as ctrain
+
+
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 mammoth_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(mammoth_path)
 sys.path.append(mammoth_path + '/datasets')
 sys.path.append(mammoth_path + '/backbone')
 sys.path.append(mammoth_path + '/models')
 
-from datasets import NAMES as DATASET_NAMES
-from models import get_all_models
-from argparse import ArgumentParser
-from utils.args import add_management_args
-from datasets import ContinualDataset
-from utils.continual_training import train as ctrain
-from datasets import get_dataset
-from models import get_model
-from utils.training import train
-from utils.best_args import best_args
-from utils.conf import set_random_seed
-import setproctitle
-import torch
-import uuid
-import datetime
-
 
 def lecun_fix():
     # Yann moved his website to CloudFlare. You need this now
-    from six.moves import urllib
+    from six.moves import urllib  # type: ignore
     opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     urllib.request.install_opener(opener)
@@ -72,11 +75,12 @@ def parse_args():
             best = best[-1]
         get_parser = getattr(mod, 'get_parser')
         parser = get_parser()
-        to_parse = sys.argv[1:] + ['--' + k + '=' + str(v) for k, v in best.items()]
+        to_parse = sys.argv[1:] + ['--' + k +
+                                   '=' + str(v) for k, v in best.items()]
         to_parse.remove('--load_best_args')
         args = parser.parse_args(to_parse)
         if args.model == 'joint' and args.dataset == 'mnist-360':
-            args.model = 'joint_gcl'        
+            args.model = 'joint_gcl'
     else:
         get_parser = getattr(mod, 'get_parser')
         parser = get_parser()
@@ -114,9 +118,10 @@ def main(args=None):
     backbone = dataset.get_backbone(args.backbone)
     loss = dataset.get_loss()
     model = get_model(args, backbone, loss, dataset.get_transform())
-    
+
     # set job name
-    setproctitle.setproctitle('{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))     
+    setproctitle.setproctitle('{}_{}_{}'.format(
+        args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
     if isinstance(dataset, ContinualDataset):
         train(model, dataset, args)
