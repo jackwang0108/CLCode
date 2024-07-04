@@ -17,13 +17,13 @@ from datasets.utils.continual_dataset import ContinualDataset
 
 
 def store_mnist_loaders(transform, setting):
-    train_dataset = MyMNIST(base_path() + 'MNIST',
+    train_dataset = MyMNIST(base_path() / 'MNIST',
                             train=True, download=True, transform=transform)
     if setting.args.validation:
         train_dataset, test_dataset = get_train_val(train_dataset,
                                                     transform, setting.NAME)
     else:
-        test_dataset = MNIST(base_path() + 'MNIST',
+        test_dataset = MNIST(base_path() / 'MNIST',
                              train=False, download=True, transform=transform)
 
     train_loader = DataLoader(train_dataset,
@@ -40,12 +40,13 @@ class MyMNIST(MNIST):
     """
     Overrides the MNIST dataset to change the getitem function.
     """
+
     def __init__(self, root, train=True, transform=None,
                  target_transform=None, download=False) -> None:
         super(MyMNIST, self).__init__(root, train, transform,
                                       target_transform, download)
 
-    def __getitem__(self, index: int) -> Tuple[type(Image), int, type(Image)]:
+    def __getitem__(self, index: int) -> Tuple[Image.Image, int, Image.Image]:
         """
         Gets the requested element from the dataset.
         :param index: index of the element to be returned
@@ -77,7 +78,7 @@ class PermutedMNIST(ContinualDataset):
         transform = transforms.Compose((transforms.ToTensor(), Permutation()))
         train, test = store_mnist_loaders(transform, self)
         return train, test
-        
+
     @staticmethod
     def get_backbone():
         return MNISTMLP(28 * 28, PermutedMNIST.N_CLASSES_PER_TASK)

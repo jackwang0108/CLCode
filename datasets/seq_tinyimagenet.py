@@ -21,8 +21,9 @@ class TinyImagenet(Dataset):
     """
     Defines Tiny Imagenet as for the others pytorch datasets.
     """
-    def __init__(self, root: str, train: bool=True, transform: transforms=None,
-                target_transform: transforms=None, download: bool=False) -> None:
+
+    def __init__(self, root: str, train: bool = True, transform: transforms = None,
+                 target_transform: transforms = None, download: bool = False) -> None:
         self.not_aug_transform = transforms.Compose([transforms.ToTensor()])
         self.root = root
         self.train = train
@@ -40,17 +41,20 @@ class TinyImagenet(Dataset):
                 print('Downloading dataset')
                 gdd.download_file_from_google_drive(
                     file_id='1Sy3ScMBr0F4se8VZ6TAwDYF-nNGAAdxj',
-                    dest_path=os.path.join(root, 'tiny-imagenet-processed.zip'),
+                    dest_path=os.path.join(
+                        root, 'tiny-imagenet-processed.zip'),
                     unzip=True)
 
         self.data = []
         for num in range(20):
-            self.data.append(np.load(os.path.join(root, 'processed/x_%s_%02d.npy' % ('train' if self.train else 'val', num+1))))
+            self.data.append(np.load(os.path.join(
+                root, 'processed/x_%s_%02d.npy' % ('train' if self.train else 'val', num+1))))
         self.data = np.concatenate(np.array(self.data))
 
         self.targets = []
         for num in range(20):
-            self.targets.append(np.load(os.path.join(root, 'processed/y_%s_%02d.npy' % ('train' if self.train else 'val', num+1))))
+            self.targets.append(np.load(os.path.join(
+                root, 'processed/y_%s_%02d.npy' % ('train' if self.train else 'val', num+1))))
         self.targets = np.concatenate(np.array(self.targets))
 
     def __len__(self):
@@ -80,8 +84,9 @@ class MyTinyImagenet(TinyImagenet):
     """
     Defines Tiny Imagenet as for the others pytorch datasets.
     """
-    def __init__(self, root: str, train: bool=True, transform: transforms=None,
-                target_transform: transforms=None, download: bool=False) -> None:
+
+    def __init__(self, root: str, train: bool = True, transform: transforms = None,
+                 target_transform: transforms = None, download: bool = False) -> None:
         super(MyTinyImagenet, self).__init__(
             root, train, transform, target_transform, download)
 
@@ -102,7 +107,7 @@ class MyTinyImagenet(TinyImagenet):
             target = self.target_transform(target)
 
         if hasattr(self, 'logits'):
-          return img, target, not_aug_img, self.logits[index]
+            return img, target, not_aug_img, self.logits[index]
 
         return img, target,  not_aug_img
 
@@ -114,11 +119,11 @@ class SequentialTinyImagenet(ContinualDataset):
     N_CLASSES_PER_TASK = 20
     N_TASKS = 10
     TRANSFORM = transforms.Compose(
-            [transforms.RandomCrop(64, padding=4),
-             transforms.RandomHorizontalFlip(),
-             transforms.ToTensor(),
-             transforms.Normalize((0.4802, 0.4480, 0.3975),
-                                  (0.2770, 0.2691, 0.2821))])
+        [transforms.RandomCrop(64, padding=4),
+         transforms.RandomHorizontalFlip(),
+         transforms.ToTensor(),
+         transforms.Normalize((0.4802, 0.4480, 0.3975),
+                              (0.2770, 0.2691, 0.2821))])
     # TRANSFORM = transforms.Compose([transforms.RandomCrop(64, padding=4),
     #                                 transforms.RandAugment(1, 14),
     #                                 transforms.ToTensor(),
@@ -131,20 +136,26 @@ class SequentialTinyImagenet(ContinualDataset):
         test_transform = transforms.Compose(
             [transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyTinyImagenet(data_path() + 'TINYIMG', train=True, download=False, transform=transform)
+        train_dataset = MyTinyImagenet(
+            data_path() / 'TINYIMG', train=True, download=False, transform=transform)
         if self.args.validation:
-            train_dataset, test_dataset = get_train_val(train_dataset, test_transform, self.NAME)
+            train_dataset, test_dataset = get_train_val(
+                train_dataset, test_transform, self.NAME)
         else:
-            test_dataset = TinyImagenet(data_path() + 'TINYIMG', train=False, download=False, transform=test_transform)
+            test_dataset = TinyImagenet(
+                data_path() / 'TINYIMG', train=False, download=False, transform=test_transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
         return train, test
 
     def not_aug_dataloader(self, batch_size):
-        transform = transforms.Compose([transforms.ToTensor(), self.get_denormalization_transform()])
+        transform = transforms.Compose(
+            [transforms.ToTensor(), self.get_denormalization_transform()])
 
-        train_dataset = MyTinyImagenet(data_path() + 'TINYIMG', train=True, download=False, transform=transform)
-        train_loader = get_previous_train_loader(train_dataset, batch_size, self)
+        train_dataset = MyTinyImagenet(
+            data_path() / 'TINYIMG', train=True, download=False, transform=transform)
+        train_loader = get_previous_train_loader(
+            train_dataset, batch_size, self)
 
         return train_loader
 
@@ -152,35 +163,45 @@ class SequentialTinyImagenet(ContinualDataset):
     def get_backbone(backbone_name='resnet18'):
         if backbone_name == 'resnet18':
             from backbone.ResNet import resnet18
-            backbone = resnet18(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet18(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet34':
             from backbone.ResNet import resnet34
-            backbone = resnet34(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet34(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet50':
             from backbone.ResNet import resnet50
-            backbone = resnet50(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet50(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet101':
             from backbone.ResNet import resnet101
-            backbone = resnet101(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet101(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet152':
             from backbone.ResNet import resnet152
-            backbone = resnet152(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet152(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
 
         if backbone_name == 'resnet18-meta':
             from backbone.ResNet_meta import resnet18_meta
-            backbone = resnet18_meta(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet18_meta(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet34-meta':
             from backbone.ResNet_meta import resnet34_meta
-            backbone = resnet34_meta(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet34_meta(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet50-meta':
             from backbone.ResNet_meta import resnet50_meta
-            backbone = resnet50_meta(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet50_meta(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet101-meta':
             from backbone.ResNet_meta import resnet101_meta
-            backbone = resnet101_meta(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet101_meta(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         elif backbone_name == 'resnet152-meta':
             from backbone.ResNet_meta import resnet152_meta
-            backbone = resnet152_meta(SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
+            backbone = resnet152_meta(
+                SequentialTinyImagenet.N_CLASSES_PER_TASK * SequentialTinyImagenet.N_TASKS)
         return backbone
         # return resnet18(SequentialTinyImagenet.N_CLASSES_PER_TASK
         #                 * SequentialTinyImagenet.N_TASKS)
@@ -203,7 +224,7 @@ class SequentialTinyImagenet(ContinualDataset):
     @staticmethod
     def get_denormalization_transform():
         transform = DeNormalize((0.4802, 0.4480, 0.3975),
-                                         (0.2770, 0.2691, 0.2821))
+                                (0.2770, 0.2691, 0.2821))
         return transform
 
     @staticmethod

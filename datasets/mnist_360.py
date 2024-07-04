@@ -58,8 +58,10 @@ class MNIST360(GCLDataset):
         """
         self.train_classes[0] += 1
         self.train_classes[1] += 1
-        if self.train_classes[0] == self.N_CLASSES: self.train_classes[0] = 0
-        if self.train_classes[1] == self.N_CLASSES: self.train_classes[1] = 0
+        if self.train_classes[0] == self.N_CLASSES:
+            self.train_classes[0] = 0
+        if self.train_classes[1] == self.N_CLASSES:
+            self.train_classes[1] = 0
 
         if self.train_classes[0] == 0:
             self.completed_rounds += 1
@@ -78,7 +80,7 @@ class MNIST360(GCLDataset):
         """
         Initializes the test loader.
         """
-        train_dataset = MyMNIST(base_path() + 'MNIST',
+        train_dataset = MyMNIST(base_path() / 'MNIST',
                                 train=True, download=True)
         if self.args.validation:
             test_transform = transforms.ToTensor()
@@ -90,7 +92,7 @@ class MNIST360(GCLDataset):
             self.remaining_training_items.append([])
             train_mask = np.isin(np.array(train_dataset.targets), [j])
             train_rotation = IncrementalRotation(init_deg=(j - 1) * 60,
-                            increase_per_iteration=360.0 / train_mask.sum())
+                                                 increase_per_iteration=360.0 / train_mask.sum())
             for k in range(self.num_rounds * 2):
                 tmp_train_dataset = deepcopy(train_dataset)
                 numbers_per_batch = train_mask.sum() // (self.num_rounds * 2) + 1
@@ -112,7 +114,7 @@ class MNIST360(GCLDataset):
         if self.args.validation:
             test_dataset = self.val_dataset
         else:
-            test_dataset = MNIST(base_path() + 'MNIST',
+            test_dataset = MNIST(base_path() / 'MNIST',
                                  train=False, download=True)
         for j in range(self.N_CLASSES):
             tmp_test_dataset = deepcopy(test_dataset)
@@ -124,7 +126,7 @@ class MNIST360(GCLDataset):
             tmp_test_dataset.transform = transforms.Compose(
                 [test_rotation, transforms.ToTensor()])
             self.test_loaders.append(DataLoader(tmp_test_dataset,
-                            batch_size=self.args.batch_size, shuffle=True))
+                                                batch_size=self.args.batch_size, shuffle=True))
 
     def get_train_data(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -155,8 +157,8 @@ class MNIST360(GCLDataset):
             x_train.append(i_x_train)
             y_train.append(i_y_train)
             x_train_naug.append(i_x_train_naug)
-        x_train, y_train, x_train_naug = torch.cat(x_train),\
-                                    torch.cat(y_train), torch.cat(x_train_naug)
+        x_train, y_train, x_train_naug = torch.cat(x_train), \
+            torch.cat(y_train), torch.cat(x_train_naug)
 
         self.active_remaining_training_items[0] -= batch_size_0
         self.active_remaining_training_items[1] -= batch_size_1
@@ -175,7 +177,7 @@ class MNIST360(GCLDataset):
         assert not self.test_over
         x_test, y_test = next(iter(self.test_loaders[self.test_class]))
         residual_items = len(self.test_loaders[self.test_class].dataset) - \
-                        self.test_iteration * self.args.batch_size - len(x_test)
+            self.test_iteration * self.args.batch_size - len(x_test)
         self.test_iteration += 1
         if residual_items <= 0:
             if residual_items < 0:

@@ -20,12 +20,14 @@ class MyCIFAR10(CIFAR10):
     """
     Overrides the CIFAR10 dataset to change the getitem function.
     """
+
     def __init__(self, root, train=True, transform=None,
                  target_transform=None, download=False) -> None:
         self.not_aug_transform = transforms.Compose([transforms.ToTensor()])
-        super(MyCIFAR10, self).__init__(root, train, transform, target_transform, download)
+        super(MyCIFAR10, self).__init__(root, train,
+                                        transform, target_transform, download)
 
-    def __getitem__(self, index: int) -> Tuple[type(Image), int, type(Image)]:
+    def __getitem__(self, index: int) -> Tuple[Image.Image, int, Image.Image]:
         """
         Gets the requested element from the dataset.
         :param index: index of the element to be returned
@@ -59,11 +61,11 @@ class SequentialCIFAR10Blurry(ContinualDataset):
     N_TASKS = 5
     BLURRY_M = 30
     TRANSFORM = transforms.Compose(
-            [transforms.RandomCrop(32, padding=4),
-             transforms.RandomHorizontalFlip(),
-             transforms.ToTensor(),
-             transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                  (0.2470, 0.2435, 0.2615))])
+        [transforms.RandomCrop(32, padding=4),
+         transforms.RandomHorizontalFlip(),
+         transforms.ToTensor(),
+         transforms.Normalize((0.4914, 0.4822, 0.4465),
+                              (0.2470, 0.2435, 0.2615))])
 
     # TRANSFORM = transforms.Compose([transforms.RandomCrop(32, padding=4),
     #                                 transforms.RandAugment(1, 14),
@@ -74,13 +76,17 @@ class SequentialCIFAR10Blurry(ContinualDataset):
     def __init__(self, args):
         super(SequentialCIFAR10Blurry, self).__init__(args)
         transform = self.TRANSFORM
-        test_transform = transforms.Compose([transforms.ToTensor(), self.get_normalization_transform()])
-        self.train_dataset = MyCIFAR10(data_path() + 'CIFAR10', train=True, download=False, transform=transform)
+        test_transform = transforms.Compose(
+            [transforms.ToTensor(), self.get_normalization_transform()])
+        self.train_dataset = MyCIFAR10(
+            data_path() / 'CIFAR10', train=True, download=False, transform=transform)
 
         if self.args.validation:
-            self.train_dataset, self.test_dataset = get_train_val(self.train_dataset, test_transform, self.NAME)
+            self.train_dataset, self.test_dataset = get_train_val(
+                self.train_dataset, test_transform, self.NAME)
         else:
-            self.test_dataset = CIFAR10(data_path() + 'CIFAR10', train=False, download=False, transform=test_transform)
+            self.test_dataset = CIFAR10(
+                data_path() / 'CIFAR10', train=False, download=False, transform=test_transform)
 
         self.train_idx_all, self.test_idx_all, self.blurry_idx_all = [], [], []
         for tt in range(SequentialCIFAR10Blurry.N_TASKS):
@@ -90,17 +96,22 @@ class SequentialCIFAR10Blurry(ContinualDataset):
                                               np.array(self.train_dataset.targets) < cls2))[0]
             tst_idx = np.where(np.logical_and(np.array(self.test_dataset.targets) >= cls1,
                                               np.array(self.test_dataset.targets) < cls2))[0]
-            blurry_idx = np.random.choice(trn_idx, int(len(trn_idx) * SequentialCIFAR10Blurry.BLURRY_M / 100), replace=False)
+            blurry_idx = np.random.choice(trn_idx, int(
+                len(trn_idx) * SequentialCIFAR10Blurry.BLURRY_M / 100), replace=False)
             trn_idx = np.setdiff1d(trn_idx, blurry_idx)
             self.train_idx_all.append(trn_idx)
             self.test_idx_all.append(tst_idx)
-            self.blurry_idx_all.append(np.array_split(blurry_idx, SequentialCIFAR10Blurry.N_TASKS - 1))
+            self.blurry_idx_all.append(np.array_split(
+                blurry_idx, SequentialCIFAR10Blurry.N_TASKS - 1))
             self.blurry_idx_all[tt].insert(tt, [])
 
         for tt in range(SequentialCIFAR10Blurry.N_TASKS):
-            other_tasks = np.delete(np.arange(SequentialCIFAR10Blurry.N_TASKS), tt)
-            blurry_idx = np.concatenate([self.blurry_idx_all[other_tt][tt] for other_tt in other_tasks])
-            self.train_idx_all[tt] = np.concatenate([self.train_idx_all[tt], blurry_idx])
+            other_tasks = np.delete(
+                np.arange(SequentialCIFAR10Blurry.N_TASKS), tt)
+            blurry_idx = np.concatenate(
+                [self.blurry_idx_all[other_tt][tt] for other_tt in other_tasks])
+            self.train_idx_all[tt] = np.concatenate(
+                [self.train_idx_all[tt], blurry_idx])
 
         self.t = 0
 
@@ -121,37 +132,47 @@ class SequentialCIFAR10Blurry(ContinualDataset):
     def get_backbone(backbone_name='resnet18'):
         if backbone_name == 'resnet18':
             from backbone.ResNet import resnet18
-            backbone = resnet18(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet18(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
             # from backbone.ResNet18 import resnet18
             # return resnet18(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet34':
             from backbone.ResNet import resnet34
-            backbone = resnet34(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet34(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet50':
             from backbone.ResNet import resnet50
-            backbone = resnet50(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet50(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet101':
             from backbone.ResNet import resnet101
-            backbone = resnet101(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet101(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet152':
             from backbone.ResNet import resnet152
-            backbone = resnet152(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet152(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
 
         if backbone_name == 'resnet18-meta':
             from backbone.ResNet_meta import resnet18_meta
-            backbone = resnet18_meta(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet18_meta(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet34-meta':
             from backbone.ResNet_meta import resnet34_meta
-            backbone = resnet34_meta(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet34_meta(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet50-meta':
             from backbone.ResNet_meta import resnet50_meta
-            backbone = resnet50_meta(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet50_meta(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet101-meta':
             from backbone.ResNet_meta import resnet101_meta
-            backbone = resnet101_meta(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet101_meta(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         elif backbone_name == 'resnet152-meta':
             from backbone.ResNet_meta import resnet152_meta
-            backbone = resnet152_meta(SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
+            backbone = resnet152_meta(
+                SequentialCIFAR10Blurry.N_CLASSES_PER_TASK * SequentialCIFAR10Blurry.N_TASKS)
         return backbone
 
     @staticmethod

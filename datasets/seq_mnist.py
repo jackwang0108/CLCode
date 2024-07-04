@@ -20,13 +20,14 @@ class MyMNIST(MNIST):
     """
     Overrides the MNIST dataset to change the getitem function.
     """
+
     def __init__(self, root, train=True, transform=None,
                  target_transform=None, download=False) -> None:
         self.not_aug_transform = transforms.ToTensor()
         super(MyMNIST, self).__init__(root, train,
                                       transform, target_transform, download)
 
-    def __getitem__(self, index: int) -> Tuple[type(Image), int, type(Image)]:
+    def __getitem__(self, index: int) -> Tuple[Image.Image, int, Image.Image]:
         """
         Gets the requested element from the dataset.
         :param index: index of the element to be returned
@@ -61,14 +62,14 @@ class SequentialMNIST(ContinualDataset):
 
     def get_data_loaders(self):
         transform = transforms.ToTensor()
-        train_dataset = MyMNIST(base_path() + 'MNIST',
+        train_dataset = MyMNIST(base_path() / 'MNIST',
                                 train=True, download=True, transform=transform)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                         transform, self.NAME)
         else:
-            test_dataset = MNIST(base_path() + 'MNIST',
-                                train=False, download=True, transform=transform)
+            test_dataset = MNIST(base_path() / 'MNIST',
+                                 train=False, download=True, transform=transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
         return train, test
