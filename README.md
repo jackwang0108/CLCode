@@ -1,13 +1,4 @@
-# CBA-online-CL
-
-This is an official PyTorch implementation of [**"CBA: Improving Online Continual Learning via Continual Bias Adaptor"**](https://arxiv.org/abs/2308.06925) by Quanziang Wang, Renzhen Wang, Yichen Wu, Xixi Jia, and Deyu Meng.
-
-Please contact Quanziang Wang ([quanziangwang@gmail.com](mailto:quanziangwang@gmail.com)), Renzhen Wang ([rzwang@xjtu.edu.cn](mailto:rzwang@xjtu.edu.cn)), or Deyu Meng ([dymeng@xjtu.edu.cn](mailto:dymeng@xjtu.edu.cn)).
-
-![Main Illustration](https://github.com/wqza/CBA-online-CL/blob/main/pics/main_illustration.png)
-
-* We extended the [Mammoth](https://github.com/aimagelab/mammoth) framework with our method and applied it to various rehearsal-based baselines.
-
+# CL-Codes
 
 
 ## Setup and Training
@@ -37,25 +28,6 @@ Please contact Quanziang Wang ([quanziangwang@gmail.com](mailto:quanziangwang@gm
 * quadprog=0.1.7
 
 
+## Acknowledgement
 
-## Cite Our Work
-
-If you find our work or this code is useful, please cite us:
-
-```
-@inproceedings{cba,
-  title={CBA: Improving Online Continual Learning via Continual Bias Adaptor},
-  author={Wang, Quanziang and Wang, Renzhen and Wu, Yichen and Jia, Xixi and Meng, Deyu},
-  booktitle={ICCV},
-  year={2023}
-}
-```
-
-
-
-
-
-
-
-
-
+This repository is developed based on the CBA-online-CL
