@@ -5,6 +5,7 @@ import uuid
 import socket
 import datetime
 import importlib
+import urllib.request
 from argparse import ArgumentParser
 
 # Third-Party Library
@@ -25,6 +26,7 @@ from utils.best_args import best_args
 from utils.conf import set_random_seed
 from utils.args import add_management_args
 from utils.continual_training import train as ctrain
+from utils.types import Args
 
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -37,33 +39,42 @@ sys.path.append(mammoth_path + '/models')
 
 def lecun_fix():
     # Yann moved his website to CloudFlare. You need this now
-    from six.moves import urllib  # type: ignore
     opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     urllib.request.install_opener(opener)
 
 
 def parse_args():
-    parser = ArgumentParser(description='mammoth', allow_abbrev=False)
-    parser.add_argument('--model', type=str, required=True,
-                        help='Model name.', choices=get_all_models())
-    parser.add_argument('--backbone', type=str, default='resnet18',
-                        help='Backbone.')
-    parser.add_argument('--load_best_args', action='store_true',
-                        help='Loads the best arguments for each method, '
-                             'dataset and memory buffer.')
-    torch.set_num_threads(4)
-    add_management_args(parser)
-    args = parser.parse_known_args()[0]
-    mod = importlib.import_module('models.' + args.model)
+    parser = ArgumentParser(description='CL-Codes', allow_abbrev=False)
 
+    # set the model
+    parser.add_argument('--model', type=str, required=True,
+                        help='Model to train', choices=get_all_models())
+
+    # set the backbone
+    parser.add_argument('--backbone', type=str, default='resnet18',
+                        help='Backbone to use')
+
+    # if load the best parameters
+    parser.add_argument('--load_best_args', action='store_true',
+                        help='Loads the best arguments for each method, dataset and memory buffer.')
+
+    add_management_args(parser)
+
+    args: Args = parser.parse_known_args()[0]
+
+    torch.set_num_threads(4)
+
+    mod = importlib.import_module('models.' + args.model)
     if args.load_best_args:
         parser.add_argument('--dataset', type=str, required=True,
                             choices=DATASET_NAMES,
                             help='Which dataset to perform experiments on.')
+
         if hasattr(mod, 'Buffer'):
             parser.add_argument('--buffer_size', type=int, required=True,
                                 help='The size of the memory buffer.')
+
         args = parser.parse_args()
         if args.model == 'joint':
             best = best_args[args.dataset]['sgd']
