@@ -29,7 +29,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument('--optim_mom', type=float, default=0.,
                         help='optimizer momentum.')
     parser.add_argument('--optim_nesterov', type=int, default=0,
-                        help='optimizer nesterov momentum.')    
+                        help='optimizer nesterov momentum.')
 
     parser.add_argument('--n_epochs', type=int,
                         help='Batch size.')
@@ -51,8 +51,9 @@ def add_management_args(parser: ArgumentParser) -> None:
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
 
-    parser.add_argument('--save_model', action='store_true', help='Save the training model')
-    parser.add_argument('--gpu_id', type=int, help='GPU')
+    parser.add_argument('--save_model', action='store_true',
+                        help='Save the training model')
+    parser.add_argument('--gpu_id', type=int, help='GPU to use')
     parser.add_argument('--exp', type=str, default='0', help='experiment_name')
 
 
