@@ -1,22 +1,26 @@
 # Standard Library
 import importlib
 from pathlib import Path
+from typing import Callable
 
 # My Library
-from utils.types import Args
+from .utils.continual_model import ContinualModel
+from utils.types import CVBackboneImpl, Args
+
+
+model_dir = Path(__file__).resolve().parent
 
 
 def get_all_models() -> list[str]:
-    model_dir = Path(__file__).resolve().parent
     return [f.stem for f in model_dir.iterdir() if f.is_file() and not '__' in f.name and f.suffix == '.py']
 
 
-names = {}
+models: dict[str, ContinualModel] = {}
 for model in get_all_models():
     mod = importlib.import_module('models.' + model)
     class_name = {x.lower(): x for x in mod.__dir__()}[model.replace('_', '')]
-    names[model] = getattr(mod, class_name)
+    models[model] = getattr(mod, class_name)
 
 
-def get_model(args: Args, backbone, loss, transform):
-    return names[args.model](backbone, loss, args, transform)
+def get_model(args: Args, backbone: CVBackboneImpl, loss: Callable, transform) -> ContinualModel:
+    return models[args.model](backbone, loss, args, transform)
