@@ -1,17 +1,21 @@
-# Copyright 2022-present, Lorenzo Bonicelli, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
+# Standard Library
 from abc import abstractmethod
 from argparse import Namespace
-from torch import nn as nn
-from torchvision.transforms import transforms
-from torch.utils.data import DataLoader
-from typing import Tuple
-from torchvision import datasets
+from typing import Tuple, Callable
+
+# Third-Party Library
 import numpy as np
+
+# Torch Library
 import torch.optim
+from torch import nn as nn
+from torchvision import datasets
+from torch.utils.data import DataLoader
+from torchvision.transforms import transforms
+from torchvision.datasets import VisionDataset
+
+# My Library
+from utils.types import Args, CVBackboneImpl, CLDatasetImpl
 
 
 class ContinualDataset:
@@ -24,112 +28,154 @@ class ContinualDataset:
     N_TASKS = None
     TRANSFORM = None
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, args: Args) -> None:
         """
-        Initializes the train and test lists of dataloaders.
-        :param args: the arguments which contains the hyperparameters
+        initializes the train and test lists of dataloaders.
+
+        Args:
+            args (Args): command line arguments
         """
-        self.train_loader = None
-        self.test_loaders = []
-        self.i = 0
-        self.args = args
+        self.i: int = 0
+        self.args: Args = args
+        self.train_loader: DataLoader = None
+        self.test_loaders: list[DataLoader] = []
 
     @abstractmethod
-    def get_data_loaders(self) -> Tuple[DataLoader, DataLoader]:
+    def get_data_loaders(self) -> tuple[DataLoader, DataLoader]:
         """
-        Creates and returns the training and test loaders for the current task.
+        get_data_loaders creates and returns the training and test loaders for the current task.
+
         The current training loader and all test loaders are stored in self.
-        :return: the current training and test loaders
+
+        Returns:
+            tuple[DataLoader, DataLoader]: the current training and test loaders
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_backbone() -> nn.Module:
+    def get_backbone() -> CVBackboneImpl:
         """
         Returns the backbone to be used for to the current dataset.
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_transform() -> transforms:
+    def get_transform() -> transforms.Compose:
         """
-        Returns the transform to be used for to the current dataset.
+        get_transform returns the transform to be used for the current dataset.
+
+        Returns:
+            transforms.Compose: the transform to be used for the dataset
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_loss() -> nn.functional:
+    def get_loss() -> Callable:
         """
-        Returns the loss to be used for to the current dataset.
+        get_loss returns the loss to be used for the current dataset.
+
+        Returns:
+            Callable: the loss function defined in nn.functional
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_normalization_transform() -> transforms:
+    def get_normalization_transform() -> transforms.Compose:
         """
-        Returns the transform used for normalizing the current dataset.
+        get_normalization_transform returns the transform used for normalizing the current dataset.
+
+        Returns:
+            transforms.Compose: the normalization transform to be used for the dataset
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_denormalization_transform() -> transforms:
+    def get_denormalization_transform() -> transforms.Compose:
         """
-        Returns the transform used for denormalizing the current dataset.
+        get_denormalization_transform returns the transform used for denormalizing the current dataset.
+
+        Returns:
+            transforms.Compose: the de-normalization transform to be used for the dataset
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
-    def get_scheduler(model, args: Namespace) -> torch.optim.lr_scheduler:
+    def get_scheduler(model, args: Args) -> torch.optim.lr_scheduler.LRScheduler:
         """
-        Returns the scheduler to be used for to the current dataset.
+        get_scheduler returns the scheduler to be used for to the current dataset.
+
+        Args:
+            model (_type_): _description_
+            args (Args): command line arguments
+
+        Raises:
+            NotImplementedError: _description_
+
+        Returns:
+            torch.optim.lr_scheduler.LRScheduler: _description_
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
-    def get_epochs():
-        pass
+    def get_epochs() -> int:
+        raise NotImplementedError
 
     @staticmethod
-    def get_batch_size():
-        pass
+    def get_batch_size() -> int:
+        raise NotImplementedError
 
     @staticmethod
-    def get_minibatch_size():
-        pass
+    def get_minibatch_size() -> int:
+        raise NotImplementedError
 
 
-def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
-                    setting: ContinualDataset) -> Tuple[DataLoader, DataLoader]:
+def store_masked_loaders(
+        train_dataset: CLDatasetImpl, test_dataset: CLDatasetImpl, setting: ContinualDataset) -> Tuple[DataLoader, DataLoader]:
     """
-    Divides the dataset into tasks.
-    :param train_dataset: train dataset
-    :param test_dataset: test dataset
-    :param setting: continual learning setting
-    :return: train and test loaders
+    store_masked_loaders divides the dataset into tasks.
+
+    Args:
+        train_dataset (TrainDataset): train dataset
+        test_dataset (datasets): test dataset
+        setting (ContinualDataset): continual learning setting
+
+    Returns:
+        Tuple[DataLoader, DataLoader]: train and test loaders
     """
-    train_mask = np.logical_and(np.array(train_dataset.targets) >= setting.i,
-                                np.array(train_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
-    test_mask = np.logical_and(np.array(test_dataset.targets) >= setting.i,
-                               np.array(test_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
+    train_mask = np.logical_and(
+        np.array(train_dataset.targets) >= setting.i,
+        np.array(train_dataset.targets) < (
+            setting.i + setting.N_CLASSES_PER_TASK)
+    )
+
+    test_mask = np.logical_and(
+        np.array(test_dataset.targets) >= setting.i,
+        np.array(test_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK
+    )
 
     try:
         train_dataset.data = train_dataset.data[train_mask]
         test_dataset.data = test_dataset.data[test_mask]
     except TypeError:
-        train_dataset.data = [train_dataset.data[d] for d in np.where(train_mask > 0)[0]]
-        test_dataset.data = [test_dataset.data[d] for d in np.where(test_mask > 0)[0]]
+        train_dataset.data = [train_dataset.data[d]
+                              for d in np.where(train_mask > 0)[0]]
+        test_dataset.data = [test_dataset.data[d]
+                             for d in np.where(test_mask > 0)[0]]
 
     train_dataset.targets = np.array(train_dataset.targets)[train_mask]
     test_dataset.targets = np.array(test_dataset.targets)[test_mask]
 
-    train_loader = DataLoader(train_dataset, batch_size=setting.args.batch_size, shuffle=True, num_workers=0)
-    test_loader = DataLoader(test_dataset, batch_size=setting.args.batch_size, shuffle=False, num_workers=0)
+    train_loader = DataLoader(
+        train_dataset, batch_size=setting.args.batch_size, shuffle=True, num_workers=0)
+    test_loader = DataLoader(
+        test_dataset, batch_size=setting.args.batch_size, shuffle=False, num_workers=0)
+
     setting.test_loaders.append(test_loader)
     setting.train_loader = train_loader
 
@@ -137,24 +183,33 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
     return train_loader, test_loader
 
 
-def store_blurry_masked_loaders(train_dataset: datasets, test_dataset: datasets,
-                                setting: ContinualDataset, current_task) -> Tuple[DataLoader, DataLoader]:
+def store_blurry_masked_loaders(
+        train_dataset: CLDatasetImpl, test_dataset: CLDatasetImpl, setting: ContinualDataset, current_task: int) -> Tuple[DataLoader, DataLoader]:
     """
-    Divides the dataset into tasks.
-    :param train_dataset: train dataset
-    :param test_dataset: test dataset
-    :param setting: continual learning setting
-    :return: train and test loaders
+    store_blurry_masked_loaders divides the dataset into tasks.
+
+    Args:
+        train_dataset (TrainDataset): train dataset
+        test_dataset (datasets): test dataset
+        setting (ContinualDataset): continual learning setting
+        current_task (int): current task id
+
+    Returns:
+        Tuple[DataLoader, DataLoader]: train and test loaders
     """
     # print(setting.train_idx_all[current_task].max(), len(np.array(train_dataset.targets)))
     train_dataset.data = train_dataset.data[setting.train_idx_all[current_task]]
     test_dataset.data = test_dataset.data[setting.test_idx_all[current_task]]
 
-    train_dataset.targets = np.array(train_dataset.targets)[setting.train_idx_all[current_task]]
-    test_dataset.targets = np.array(test_dataset.targets)[setting.test_idx_all[current_task]]
+    train_dataset.targets = np.array(train_dataset.targets)[
+        setting.train_idx_all[current_task]]
+    test_dataset.targets = np.array(test_dataset.targets)[
+        setting.test_idx_all[current_task]]
 
-    train_loader = DataLoader(train_dataset, batch_size=setting.args.batch_size, shuffle=True, num_workers=0)
-    test_loader = DataLoader(test_dataset, batch_size=setting.args.batch_size, shuffle=False, num_workers=0)
+    train_loader = DataLoader(
+        train_dataset, batch_size=setting.args.batch_size, shuffle=True, num_workers=0)
+    test_loader = DataLoader(
+        test_dataset, batch_size=setting.args.batch_size, shuffle=False, num_workers=0)
     setting.test_loaders.append(test_loader)
     setting.train_loader = train_loader
 
@@ -162,14 +217,18 @@ def store_blurry_masked_loaders(train_dataset: datasets, test_dataset: datasets,
     return train_loader, test_loader
 
 
-def get_previous_train_loader(train_dataset: datasets, batch_size: int,
-                              setting: ContinualDataset) -> DataLoader:
+def get_previous_train_loader(
+        train_dataset: CLDatasetImpl, batch_size: int, setting: ContinualDataset) -> DataLoader:
     """
-    Creates a dataloader for the previous task.
-    :param train_dataset: the entire training set
-    :param batch_size: the desired batch size
-    :param setting: the continual dataset at hand
-    :return: a dataloader
+    get_previous_train_loader creates a dataloader for the previous task.
+
+    Args:
+        train_dataset (TrainDataset): the entire training set
+        batch_size (int): the desired batch size
+        setting (ContinualDataset): the continual dataset at hand
+
+    Returns:
+        DataLoader: a dataloader
     """
     train_mask = np.logical_and(np.array(train_dataset.targets) >= setting.i - setting.N_CLASSES_PER_TASK,
                                 np.array(train_dataset.targets) < setting.i - setting.N_CLASSES_PER_TASK + setting.N_CLASSES_PER_TASK)
