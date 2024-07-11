@@ -1,11 +1,9 @@
-# Copyright 2022-present, Lorenzo Bonicelli, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
+# Standard Library
 from argparse import ArgumentParser
-from datasets import NAMES as DATASET_NAMES
+
+# My Library
 from models import get_all_models
+from datasets import NAMES as DATASET_NAMES
 
 
 def add_experiment_args(parser: ArgumentParser) -> None:
@@ -25,14 +23,14 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Learning rate.')
 
     parser.add_argument('--optim_wd', type=float, default=0.,
-                        help='optimizer weight decay.')
+                        help='Optimizer weight decay.')
     parser.add_argument('--optim_mom', type=float, default=0.,
-                        help='optimizer momentum.')
+                        help='Optimizer momentum.')
     parser.add_argument('--optim_nesterov', type=int, default=0,
-                        help='optimizer nesterov momentum.')
+                        help='Optimizer nesterov momentum.')
 
     parser.add_argument('--n_epochs', type=int,
-                        help='Batch size.')
+                        help='Number of epochs to train.')
     parser.add_argument('--batch_size', type=int,
                         help='Batch size.')
 
@@ -54,7 +52,7 @@ def add_management_args(parser: ArgumentParser) -> None:
     parser.add_argument('--save_model', action='store_true',
                         help='Save the training model')
     parser.add_argument('--gpu_id', type=int, help='GPU to use')
-    parser.add_argument('--exp', type=str, default='0', help='experiment_name')
+    parser.add_argument('--exp', type=str, default='0', help='Experiment name')
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:
