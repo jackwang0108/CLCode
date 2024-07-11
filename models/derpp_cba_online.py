@@ -45,7 +45,7 @@ class DERppCBAonline(ContinualModel):
         self.buffer = Buffer(self.args.buffer_size, self.device)
 
         self.current_task = 0
-        self.ii = 0
+        self.batch_idx = 0
 
     def observe(self, inputs, labels, not_aug_inputs):
         iter_num = 1
@@ -55,7 +55,7 @@ class DERppCBAonline(ContinualModel):
                 buf_inputs2, buf_labels2, _, _ = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
 
             # Outer-loop Optimization
-            if self.current_task > 0 and self.ii % 5 == 0:
+            if self.current_task > 0 and self.batch_idx % 5 == 0:
                 self.cba_updating(inputs, labels,
                                   buf_inputs1, buf_logits1,
                                   buf_inputs2, buf_labels2)

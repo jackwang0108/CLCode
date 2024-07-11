@@ -66,14 +66,14 @@ class CLSERCBAoffline(ContinualModel):
         self.CBA = MetaCBA(self.num_cls, self.num_cls, hid_dim=256).to(self.device)
         self.opt_cba = Adam(self.CBA.params(), lr=meta_lr)
 
-        self.ii = 0
+        self.batch_idx = 0
 
     def observe(self, inputs, labels, not_aug_inputs):
 
         real_batch_size = inputs.shape[0]
 
         # Outer-loop Optimization
-        if self.current_task > 0 and self.ii % 5 == 0:
+        if self.current_task > 0 and self.batch_idx % 5 == 0:
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             self.cba_updating(inputs, labels, buf_inputs, buf_labels)
 

@@ -35,22 +35,24 @@ class ERCBAoffline(ContinualModel):
             meta_lr = 1e-2
         elif args.dataset == 'seq-tinyimg' or args.dataset == 'seq-tinyimg-blurry':
             meta_lr = 1e-2
-        self.CBA = MetaCBA(self.num_cls, self.num_cls, hid_dim=256).to(self.device)
+        self.CBA = MetaCBA(self.num_cls, self.num_cls,
+                           hid_dim=256).to(self.device)
         self.opt_cba = Adam(self.CBA.params(), lr=meta_lr)
 
         self.buffer = Buffer(self.args.buffer_size, self.device)
 
         self.current_task = 0
-        self.ii = 0
+        self.batch_idx = 0
 
     def observe(self, inputs, labels, not_aug_inputs):
         iter_num = 1
         for ii in range(iter_num):
             if not self.buffer.is_empty():
-                buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
+                buf_inputs, buf_labels = self.buffer.get_data(
+                    self.args.minibatch_size, transform=self.transform)
 
             # Outer-loop Optimization
-            if self.current_task > 0 and self.ii % 5 == 0:
+            if self.current_task > 0 and self.batch_idx % 5 == 0:
                 self.cba_updating(inputs, labels,
                                   buf_inputs, buf_labels)
 
@@ -99,12 +101,15 @@ class ERCBAoffline(ContinualModel):
         loss += self.loss(buf_outputs, buf_labels.long())
 
         meta_model.zero_grad()
-        grads = torch.autograd.grad(loss, meta_model.fc.params(), create_graph=True)
-        meta_model.fc.update_params(lr_inner=self.opt.param_groups[0]['lr'], source_params=grads)
+        grads = torch.autograd.grad(
+            loss, meta_model.fc.params(), create_graph=True)
+        meta_model.fc.update_params(
+            lr_inner=self.opt.param_groups[0]['lr'], source_params=grads)
         del grads
 
         # 3. update bias corrector by buffer set
-        buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
+        buf_inputs, buf_labels = self.buffer.get_data(
+            self.args.minibatch_size, transform=self.transform)
         _buf_outputs = meta_model(buf_inputs)
         loss_meta = self.loss(_buf_outputs, buf_labels.long())
 
@@ -134,7 +139,3 @@ def bn_no_momentum(m):
 def bn_normal_momentum(m):
     if isinstance(m, MetaBatchNorm2d):
         m.momentum = 0.1
-
-
-
-
