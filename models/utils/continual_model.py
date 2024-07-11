@@ -1,55 +1,91 @@
-# Copyright 2020-present, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# Standard Library
+from typing import Callable, Literal
 
-import torch.nn as nn
-from torch.optim import SGD
+# Torch Library
 import torch
-import torchvision
-from argparse import Namespace
+import torch.nn as nn
+from torch.optim import Optimizer, SGD
+from torchvision.transforms import Compose
+
+# My Library
 from utils.conf import get_device
+from utils.types import Args, CVBackboneImpl
+from datasets.utils.continual_dataset import ContinualDataset
 
 
 class ContinualModel(nn.Module):
     """
     Continual learning model.
     """
-    NAME = None
-    COMPATIBILITY = []
 
-    def __init__(self, backbone: nn.Module, loss: nn.Module,
-                args: Namespace, transform: torchvision.transforms) -> None:
+    NAME: str = None
+    TITLE: str = None
+    ARXIV: str = None
+
+    COMPATIBILITY: list[Literal["task-il", "class-il"]] = []
+
+    epoch: int = 0              # some model need epoch
+    batch_idx: int = 0          # some model need batch_idx
+
+    def __init__(
+            self, backbone: CVBackboneImpl, loss: nn.Module, args: Args, transform: Compose) -> None:
         super(ContinualModel, self).__init__()
 
-        self.net = backbone
-        self.loss = loss
-        self.args = args
-        self.transform = transform
-        try:
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr)
-        except:
-            self.opt = SGD(self.net.params(), lr=self.args.lr)
-        self.device = get_device(args.gpu_id)
+        self.args: Args = args
+        self.loss: Callable = loss
+        self.transform: Compose = transform
+        self.net: CVBackboneImpl = backbone
 
-        self.num_cls = self.net.fc.weight.shape[0]
+        try:
+            self.opt: Optimizer = SGD(self.net.parameters(), lr=self.args.lr)
+        except:
+            self.opt: Optimizer = SGD(self.net.params(), lr=self.args.lr)
+
+        self.device: torch.device = get_device(args.gpu_id)
+
+        self.num_cls: int = self.net.fc.weight.shape[0]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Computes a forward pass.
-        :param x: batch of inputs
-        :param task_label: some models require the task label
-        :return: the result of the computation
+        forward computes a forward pass.
+
+        Args:
+            x (torch.Tensor): batch of inputs
+
+        Returns:
+            torch.Tensor: the result of the computation
         """
         return self.net(x)
 
-    def observe(self, inputs: torch.Tensor, labels: torch.Tensor,
-                not_aug_inputs: torch.Tensor) -> float:
+    def observe(
+            self, inputs: torch.Tensor, labels: torch.Tensor, not_aug_inputs: torch.Tensor) -> torch.Tensor:
         """
-        Compute a training step over a given batch of examples.
-        :param inputs: batch of examples
-        :param labels: ground-truth labels
-        :param kwargs: some methods could require additional parameters
-        :return: the value of the loss function
+        observe computes a training step over a given batch of examples.
+
+        Args:
+            inputs (torch.Tensor): batch of examples
+            labels (torch.Tensor): ground-truth labels
+            not_aug_inputs (torch.Tensor): some methods could require additional parameters
+
+        Returns:
+            torch.Tensor: the value of the loss function
+        """
+        raise NotImplementedError
+
+    def begin_task(self, dataset: ContinualDataset) -> None:
+        """
+        begin_task prepare the model before learning on next task
+
+        Args:
+            dataset (ContinualDataset): continual learning dataset
+        """
+        raise NotImplementedError
+
+    def end_task(self, dataset: ContinualDataset) -> None:
+        """
+        end_task setup the model after learning on current task
+
+        Args:
+            dataset (ContinualDataset): continual learning dataset
         """
         pass
