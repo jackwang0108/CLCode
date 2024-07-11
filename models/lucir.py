@@ -1,45 +1,74 @@
-# Copyright 2022-present, Lorenzo Bonicelli, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Simone Calderara.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
+# Standard Library
+import math
 from copy import deepcopy
+
+# Third-Party Library
+import numpy as np
 from models.icarl import fill_buffer
 from utils.batch_norm import bn_track_stats
 
-from torch.utils.data.dataloader import DataLoader
+# Torch Library
 import torch
+from torch import nn
 import torch.nn.functional as F
+from torch.utils.data.dataloader import DataLoader
+
+# My Library
+from utils.args import *
 from datasets import get_dataset
 from utils.buffer import Buffer, icarl_replay
-from utils.args import *
+from utils.types import Args, CVBackboneImpl, CVTransforms
 from models.utils.continual_model import ContinualModel
-import numpy as np
-import math
-from torch import nn
 
 
-def lucir_batch_hard_triplet_loss(labels, embeddings, k, margin, num_old_classes):
+def lucir_batch_margin_ranking_loss(
+        labels: torch.Tensor, probas: torch.Tensor, k: int, margin: float, num_old_classes: int) -> torch.Tensor:
     """
-    LUCIR triplet loss.
+    lucir_batch_margin_ranking_loss calculates margin ranking loss, i.e. L_{mr}(x), defined in Sec. 3.4 Inter-Class Separation
+
+    a good introduction about margin ranking loss: https://gombru.github.io/2019/04/03/ranking_loss/
+
+    Args:
+        labels (torch.Tensor): the label of the input
+        probas (torch.Tensor): the classification probabilities output by cosine classifier
+        k (int): top-K new class embedding chosen as hard negatives
+        margin (float): margin threshold
+        num_old_classes (int): _description_
+
+    Returns:
+        torch.Tensor: lucir batch margin ranking loss L_mr
     """
-    gt_index = torch.zeros(embeddings.size()).to(embeddings.device)
-    gt_index = gt_index.scatter(1, labels.reshape(-1, 1).long(), 1).ge(0.5)
-    gt_scores = embeddings.masked_select(gt_index)
-    # get top-K scores on novel classes
-    max_novel_scores = embeddings[:, num_old_classes:].topk(k, dim=1)[0]
-    # the index of hard samples, i.e., samples of old classes
-    hard_index = labels.lt(num_old_classes)
-    hard_num = torch.nonzero(hard_index).size(0)
-    if hard_num > 0:
-        gt_scores = gt_scores[hard_index].view(-1, 1).repeat(1, k)
-        max_novel_scores = max_novel_scores[hard_index]
-        assert(gt_scores.size() == max_novel_scores.size())
-        assert(gt_scores.size(0) == hard_num)
-        loss = nn.MarginRankingLoss(margin=margin)(gt_scores.view(-1, 1),
-                                                   max_novel_scores.view(-1, 1), torch.ones(hard_num*k).to(embeddings.device))
-    else:
-        loss = torch.zeros(1).to(embeddings.device)
+
+    # if there is no examples of old classes in the batch
+    old_example_index = labels < num_old_classes
+    loss = torch.zeros(1).to(probas.device)
+    if (old_example_num := old_example_index.sum()) < 0:
+        return loss
+
+    # get the ground truth possibility of old examples
+    gt_index = torch.zeros_like(probas)
+    gt_index = gt_index.scatter(
+        dim=1, index=labels.unsqueeze(-1), value=1) == 1
+    gt_probas = probas.masked_select(gt_index)
+
+    old_example_gt_probas = gt_probas[old_example_index].view(
+        -1, 1).repeat(1, k)
+
+    # get top-K novel classes probability
+    top_novel_probas = probas[:, num_old_classes:].topk(k, dim=1)[0]
+    old_example_top_novel_probas = top_novel_probas[old_example_index]
+
+    assert (old_example_gt_probas.size() ==
+            old_example_top_novel_probas.size()), f"old example probability mismatches, {old_example_gt_probas.size()=}, {old_example_top_novel_probas.size()=}"
+    assert (old_example_gt_probas.size(
+        0) == old_example_num), f"old example num mismatches, {old_example_gt_probas.size(0)=}, {old_example_num=}"
+
+    # For old examples, pushes novel classes probability (for cosine classifier, distance) away from ground truth old class probability
+    loss = nn.MarginRankingLoss(margin=margin)(
+        old_example_gt_probas.flatten(),
+        old_example_top_novel_probas.flatten(),
+        torch.ones(old_example_num * k).to(probas.device)
+    )
 
     return loss
 
@@ -69,59 +98,80 @@ def get_parser() -> ArgumentParser:
 
 
 class CustomClassifier(nn.Module):
-    def __init__(self, in_features, cpt, n_tasks):
+    """ CustomClassifier is the Cosine Similarity Classifier use in Lucir """
+
+    def __init__(self, in_features: int, class_per_task: int, n_tasks: int):
         super().__init__()
 
-        self.weights = nn.ParameterList(
-            [nn.parameter.Parameter(torch.Tensor(cpt, in_features))
-             for _ in range(n_tasks)]
+        # Parameters
+        self.weights: list[nn.Parameter] = nn.ParameterList(
+            [
+                nn.parameter.Parameter(torch.Tensor(class_per_task, in_features)) for _ in range(n_tasks)
+            ]
         )
+
         self.sigma = nn.parameter.Parameter(torch.Tensor(1))
 
-        self.in_features = in_features
-        self.task = 0
-        self.cpt = cpt
-        self.n_tasks = n_tasks
+        # Task settings
+        self.n_tasks: int = n_tasks
+        self.in_features: int = in_features
+        self.class_per_task: int = class_per_task
         self.reset_parameters()
+
+        # set the first task
+        self.task = 0
         self.weights[0].requires_grad = True
 
     def reset_parameters(self):
+        """
+        reset_parameters resets the parameters of all task
+        """
         for i in range(self.n_tasks):
+            # Manual Xavier Normalization
             stdv = 1. / math.sqrt(self.weights[i].size(1))
             self.weights[i].data.uniform_(-stdv, stdv)
+
             self.weights[i].requires_grad = False
 
         self.sigma.data.fill_(1)
 
-    def forward(self, x):
-        return self.noscale_forward(x)*self.sigma
+    def forward(self, non_normalized_features: torch.Tensor) -> torch.Tensor:
+        return self.noscale_forward(non_normalized_features) * self.sigma
 
-    def reset_weight(self, i):
-        stdv = 1. / math.sqrt(self.weights[i].size(1))
-        self.weights[i].data.uniform_(-stdv, stdv)
-        self.weights[i].requires_grad = True
-        self.weights[i-1].requires_grad = False
+    def reset_weight(self, task_id: int):
+        """
+        reset_weight resets the weight of specific task
 
-    def noscale_forward(self, x):
-        out = None
+        Args:
+            task_id (int): task to reset
+        """
+        stdv = 1. / math.sqrt(self.weights[task_id].size(1))
+        self.weights[task_id].data.uniform_(-stdv, stdv)
+        self.weights[task_id].requires_grad = True
 
-        x = F.normalize(x, p=2, dim=1).reshape(len(x), -1)
+        self.weights[task_id-1].requires_grad = False
 
+    def noscale_forward(self, non_normalized_features: torch.Tensor) -> torch.Tensor:
+
+        normalized_features = F.normalize(non_normalized_features, p=2, dim=1).reshape(
+            len(non_normalized_features), -1)
+
+        outputs = []
         for t in range(self.n_tasks):
-            o = F.linear(x, F.normalize(self.weights[t], p=2, dim=1))
-            if out is None:
-                out = o
-            else:
-                out = torch.cat((out, o), dim=1)
+            task_output = F.linear(normalized_features,
+                                   F.normalize(self.weights[t], p=2, dim=1))
+            outputs.append(task_output)
 
-        return out
+        outputs = torch.cat(outputs, dim=1)
+
+        return outputs
 
 
 class Lucir(ContinualModel):
     NAME = 'lucir'
     COMPATIBILITY = ['class-il', 'task-il']
 
-    def __init__(self, backbone, loss, args, transform):
+    def __init__(self, backbone: CVBackboneImpl, loss, args: Args, transform: CVTransforms):
         super(Lucir, self).__init__(backbone, loss, args, transform)
         self.dataset = get_dataset(args)
 
@@ -136,7 +186,8 @@ class Lucir(ContinualModel):
         self.lamda_cos_sim = args.lamda_base
 
         # self.net.classifier = CustomClassifier(self.net.classifier.in_features, self.dataset.N_CLASSES_PER_TASK, self.dataset.N_TASKS)
-        self.net.fc = CustomClassifier(self.net.fc.in_features, self.dataset.N_CLASSES_PER_TASK, self.dataset.N_TASKS)
+        self.net.fc = CustomClassifier(
+            self.net.fc.in_features, self.dataset.N_CLASSES_PER_TASK, self.dataset.N_TASKS)
 
         # upd_weights = [p for n, p in self.net.named_parameters()
         #                if 'classifier' not in n and '_fc' not in n] + [self.net.classifier.weights[0], self.net.classifier.sigma]
@@ -148,8 +199,8 @@ class Lucir(ContinualModel):
         self.opt = torch.optim.SGD([{'params': upd_weights, 'lr': self.args.lr, 'momentum': self.args.optim_mom, 'weight_decay': self.args.optim_wd}, {
             'params': fix_weights, 'lr': 0, 'momentum': self.args.optim_mom, 'weight_decay': 0}])
 
-        self.ft_lr_strat = [10]
-    
+        self.ft_lr_start = [10]
+
         self.c_epoch = -1
 
     def update_classifier(self):
@@ -157,7 +208,7 @@ class Lucir(ContinualModel):
         # self.net.classifier.reset_weight(self.task)
         self.net.fc.task += 1
         self.net.fc.reset_weight(self.task)
-        
+
     def forward(self, x):
         with torch.no_grad():
             outputs = self.net(x)
@@ -176,35 +227,36 @@ class Lucir(ContinualModel):
         loss.backward()
 
         self.opt.step()
-            
+
         return loss.item()
 
     def get_loss(self, inputs: torch.Tensor, labels: torch.Tensor,
                  task_idx: int) -> torch.Tensor:
         """
-        Computes the loss tensor.
-        :param inputs: the images to be fed to the network
-        :param labels: the ground-truth labels
-        :param task_idx: the task index
-        :return: the differentiable loss value
+        get_loss computes the loss defined in paper
+
+        Args:
+            inputs (torch.Tensor): the images to be fed to the network
+            labels (torch.Tensor): the ground-truth labels
+            task_idx (int): the task index
+
+        Returns:
+            torch.Tensor: the lucir loss on input batch
         """
 
         pc = task_idx * self.dataset.N_CLASSES_PER_TASK
         ac = (task_idx + 1) * self.dataset.N_CLASSES_PER_TASK
 
-        # outputs = self.net(inputs, returnt='features').float()
+        outputs: torch.Tensor
         outputs = self.net(inputs, returnt='feature').float()
-        
-        # cos_output = self.net.classifier.noscale_forward(outputs)
+
         cos_output = self.net.fc.noscale_forward(outputs)
         outputs = outputs.reshape(outputs.size(0), -1)
 
-        # loss = F.cross_entropy(cos_output*self.net.classifier.sigma, labels)
         loss = F.cross_entropy(cos_output*self.net.fc.sigma, labels)
 
         if task_idx > 0:
             with torch.no_grad():
-                # logits = self.old_net(inputs, returnt='features')
                 logits = self.old_net(inputs, returnt='feature')
                 logits = logits.reshape(logits.size(0), -1)
 
@@ -212,7 +264,7 @@ class Lucir(ContinualModel):
                 outputs, logits.detach(), torch.ones(outputs.shape[0]).to(outputs.device))*self.lamda_cos_sim
 
             # Remove rescale by sigma before this loss
-            loss3 = lucir_batch_hard_triplet_loss(
+            loss3 = lucir_batch_margin_ranking_loss(
                 labels, cos_output, self.args.k_mr, self.args.mr_margin, pc) * self.args.lamda_mr
 
             loss = loss+loss2+loss3
@@ -265,12 +317,14 @@ class Lucir(ContinualModel):
     def imprint_weights(self, dataset):
         self.net.eval()
         # old_embedding_norm = torch.cat([self.net.classifier.weights[i] for i in range(self.task)]).norm(dim=1, keepdim=True)
-        old_embedding_norm = torch.cat([self.net.fc.weights[i] for i in range(self.task)]).norm(dim=1, keepdim=True)
+        old_embedding_norm = torch.cat(
+            [self.net.fc.weights[i] for i in range(self.task)]).norm(dim=1, keepdim=True)
         average_old_embedding_norm = torch.mean(
             old_embedding_norm, dim=0).cpu().type(torch.DoubleTensor)
         # num_features = self.net.classifier.in_features
         num_features = self.net.fc.in_features
-        novel_embedding = torch.zeros((self.dataset.N_CLASSES_PER_TASK, num_features))
+        novel_embedding = torch.zeros(
+            (self.dataset.N_CLASSES_PER_TASK, num_features))
         loader = dataset.train_loader
 
         cur_dataset = deepcopy(loader.dataset)
@@ -312,7 +366,8 @@ class Lucir(ContinualModel):
         # momentum=self.args.optim_mom, weight_decay=self.args.optim_wd)
         self.opt = torch.optim.SGD(self.net.fc.parameters(), self.args.lr_finetune,
                                    momentum=self.args.optim_mom, weight_decay=self.args.optim_wd)
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(self.opt, milestones=self.ft_lr_strat, gamma=0.1)
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            self.opt, milestones=self.ft_lr_start, gamma=0.1)
 
         with bn_track_stats(self, False):
             for _ in range(opt_steps):
