@@ -1,8 +1,8 @@
 # Standard Library
 import sys
 from pathlib import Path
-from typing import Tuple
 from copy import deepcopy
+from typing import Optional
 
 # Torch Library
 import torch
@@ -23,8 +23,7 @@ from utils.types import Args, ContinualModelImpl
 
 def mask_classes(outputs: torch.Tensor, dataset: ContinualDataset, task_id: int) -> None:
     """
-    Given the output tensor, the dataset at hand and the current task,
-    , mask_classes masks the former by setting the responses for the other tasks at -inf.
+    Given the output tensor, the dataset at hand and the current task, mask_classes masks the former by setting the responses for the other tasks at -inf.
     It is used to obtain the results for the task-il setting.
 
     Args:
@@ -39,34 +38,45 @@ def mask_classes(outputs: torch.Tensor, dataset: ContinualDataset, task_id: int)
 
 @torch.no_grad()
 def evaluate(model: ContinualModel | ContinualModelImpl, dataset: ContinualDataset,
-             last: bool = False, returnt=None) -> Tuple[list, list]:
+             last: Optional[bool] = False, returnt: Optional[str] = None) -> tuple[list[float], list[float]]:
     """
-    evaluate evaluates the accuracy of the model for previous tasks.
+    evaluates the model on all previous tasks.
 
     Args:
         model (ContinualModel): the model to be evaluated
         dataset (ContinualDataset): the continual dataset at hand
-        last (bool, optional): _description_. Defaults to False.
-        returnt (_type_, optional): _description_. Defaults to None.
+        last (bool, optional): if test on the last task only. Defaults to False.
+        returnt (str, optional): optional arg to control the method output prediction for specific model. Defaults to None.
 
     Returns:
         Tuple[list, list]: a tuple of lists, containing the class-il and task-il accuracy for each task.
     """
+
+    # set to evaluation mode
     status = model.net.training
     model.net.eval()
-    accs, accs_mask_classes = [], []
 
+    accs, accs_mask_classes = [], []
     for task_id, test_loader in enumerate(dataset.test_loaders):
 
-        # skip
+        # if test on the last task
         if last and task_id < len(dataset.test_loaders) - 1:
             continue
 
-        correct, correct_mask_classes, total = 0.0, 0.0, 0.0
-        for data in test_loader:
-            inputs, labels = data
-            inputs, labels = inputs.to(
-                model.device), labels.to(model.device)
+        total: int = 0
+        correct: int = 0
+        correct_mask_classes: int = 0
+
+        pred: torch.Tensor
+        inputs: torch.Tensor
+        labels: torch.Tensor
+        outputs: torch.Tensor
+
+        for (inputs, labels) in test_loader:
+
+            inputs = inputs.to(model.device)
+            labels = labels.to(model.device)
+
             if 'class-il' not in model.COMPATIBILITY:
                 outputs = model(inputs, task_id)
             else:
@@ -76,17 +86,18 @@ def evaluate(model: ContinualModel | ContinualModelImpl, dataset: ContinualDatas
                 res_outputs = model.CBA(F.softmax(outputs, dim=-1))
                 outputs = outputs + res_outputs
 
-            _, pred = torch.max(outputs.data, 1)
-            correct += torch.sum(pred == labels).item()
+            # batch acc
             total += labels.shape[0]
+            pred = outputs.argmax(dim=1)
+            correct += (pred == labels).sum().item()
 
             if dataset.SETTING == 'class-il':
                 mask_classes(outputs, dataset, task_id)
-                _, pred = torch.max(outputs.data, 1)
-                correct_mask_classes += torch.sum(pred == labels).item()
+                pred = outputs.argmax(dim=1)
+                correct_mask_classes += (pred == labels).sum().item()
 
-        accs.append(correct / total *
-                    100 if 'class-il' in model.COMPATIBILITY else 0)
+        accs.append(
+            correct / total * 100 if 'class-il' in model.COMPATIBILITY else 0)
         accs_mask_classes.append(correct_mask_classes / total * 100)
 
     model.net.train(status)
@@ -116,8 +127,6 @@ def train(
         for arg in vars(args):
             f.write('{}:\t{}\n'.format(arg, getattr(args, arg)))
 
-    results, results_mask_classes = [], []
-
     if args.csv_log:
         csv_logger = CsvLogger(dataset.SETTING, dataset.NAME, model.NAME)
     if args.tensorboard:
@@ -138,11 +147,17 @@ def train(
     model.total_classes = dataset.N_CLASSES_PER_TASK * dataset.N_TASKS
 
     print(file=sys.stderr)
+
+    results: list[list[float]] = []
+    results_mask_classes: list[list[float]] = []
+
     all_accuracy_cls, all_accuracy_tsk = [], []
     all_forward_cls, all_forward_tsk = [], []
     all_backward_cls, all_backward_tsk = [], []
     all_forgetting_cls, all_forgetting_tsk = [], []
-    all_acc_auc_cls, all_acc_auc_tsk = [], []
+
+    all_acc_auc_cls: list[list[float]] = []
+    all_acc_auc_tsk: list[list[float]] = []
 
     if hasattr(model, 'CBA'):
         all_CBA_accuracy_cls, all_CBA_accuracy_tsk = [], []
@@ -224,13 +239,14 @@ def train(
         if hasattr(model, 'end_task'):
             model.end_task(dataset)
 
+        # test on previous task after learned current task
         accs = evaluate(model, dataset)
         results.append(accs[0])
         results_mask_classes.append(accs[1])
 
         mean_acc = np.mean(accs, axis=1)
         print_mean_accuracy(mean_acc, task_id + 1, dataset.SETTING)
-        print('class-il:', accs[0], '\ntask-il:', accs[1])
+        print(f"class-il: {accs[0]:.2f}, \ntask-il: {accs[1]:.2f}")
 
         # record the results
         all_accuracy_cls.append(accs[0])
